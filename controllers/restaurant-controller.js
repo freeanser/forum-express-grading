@@ -30,9 +30,14 @@ const restaurantController = {
       })
     ])
       .then(([restaurants, categories]) => {
+        const favoritedRestaurantsId = req.user && req.user.FavoritedRestaurants.map(fr => fr.id)
+        const likedRestaurantsId = req.user && req.user.LikedRestaurants.map(lr => lr.id)
         const data = restaurants.rows.map(r => ({
           ...r,
-          description: r.description.substring(0, 50)
+          description: r.description.substring(0, 50),
+          // isFavorited, isLiked show True or False
+          isFavorited: favoritedRestaurantsId.includes(r.id),
+          isLiked: likedRestaurantsId.includes(r.id)
         }))
         return res.render('restaurants', {
           restaurants: data,
@@ -48,18 +53,28 @@ const restaurantController = {
       include: [
 
         Category,
-        {
-          model: Comment, include: User
-        }
+        { model: Comment, include: User },
+        { model: User, as: 'FavoritedUsers' },
+        { model: User, as: 'LikedUsers' }
 
       ],
       nest: true
       // raw: true
     })
-      .then(async restaurant => {
+      .then(restaurant => {
         if (!restaurant) throw new Error("Restaurant didn't exist!")
-        await restaurant.increment('viewCounts', { by: 1 })
-        res.render('restaurant', { restaurant: restaurant.toJSON() })
+        return restaurant.increment('viewCounts', { by: 1 })
+      })
+      .then(restaurant => {
+        // 因為是單間 restaurant ，所以可以直接連向 user，藉此比較 user.id
+        // const favoritedRestaurantsId = req.user && req.user.FavoritedRestaurants.map(fr => fr.id)
+        const isFavorited = restaurant.FavoritedUsers.some(f => f.id === req.user.id) // some 只要找到一個就會立刻回傳 true，後面的項目不會繼續執行
+        const isLiked = restaurant.LikedUsers.some(l => l.id === req.user.id)
+        res.render('restaurant', {
+          restaurant: restaurant.toJSON(),
+          isFavorited,
+          isLiked
+        })
       })
       .catch(err => next(err))
   },
@@ -73,7 +88,32 @@ const restaurantController = {
       // render dashboard
       .then(restaurant => {
         if (!restaurant) throw new Error("Restaurant didn't exist!")
-        res.render('dashboard', { restaurant })
+        res.render('dashboard', { restaurant: restaurant.toJSON() })
+      })
+      .catch(err => next(err))
+  },
+  getFeeds: (req, res, next) => {
+    return Promise.all([
+      Restaurant.findAll({
+        limit: 10,
+        order: [['createdAt', 'DESC']],
+        include: [Category],
+        raw: true,
+        nest: true
+      }),
+      Comment.findAll({
+        limit: 10,
+        order: [['createdAt', 'DESC']],
+        include: [User, Restaurant],
+        raw: true,
+        nest: true
+      })
+    ])
+      .then(([restaurants, comments]) => {
+        res.render('feeds', {
+          restaurants,
+          comments
+        })
       })
       .catch(err => next(err))
   }
