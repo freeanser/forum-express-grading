@@ -2,7 +2,7 @@
 const {
   Model
 } = require('sequelize')
-const favorite = require('./favorite')
+// const favorite = require('./favorite')
 module.exports = (sequelize, DataTypes) => {
   class User extends Model {
     /**
@@ -22,6 +22,16 @@ module.exports = (sequelize, DataTypes) => {
         through: models.Like,
         foreignKey: 'userId',
         as: 'LikedRestaurants'
+      })
+      User.belongsToMany(User, {
+        through: models.Followship,
+        foreignKey: 'followingId',
+        as: 'Followers'
+      })
+      User.belongsToMany(User, {
+        through: models.Followship,
+        foreignKey: 'FollowerId',
+        as: 'followings'
       })
     }
   };
